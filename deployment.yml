@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: services
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mit-els-api
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mit-els-api
+  template:
+    metadata:
+      labels:
+        app: mit-els-api
+    spec:
+      containers:
+        - name: mit-els-api
+          image: {{image}}
+          livenessProbe:
+            failureThreshold: 5
+            initialDelaySeconds: 40
+            httpGet:
+              path: /actuator/health
+              port: 8080
+          readinessProbe:
+            failureThreshold: 5
+            initialDelaySeconds: 5
+            httpGet:
+              path: /actuator/health
+              port: 8080
+          env:
+            - name: ELS_URL
+              value: dev-es-http.databases.svc.cluster.local:9200
+            - name: ELS_USERNAME
+              value: "elastic"
+            - name: ELS_PASSWORD
+              value: "9KACp49956n73ok2aqbcoI4I"
+          ports:
+            - containerPort: 8080
+              name: http-8080
+              protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    meta.helm.sh/release-name: services
+    meta.helm.sh/release-namespace: services
+  labels:
+    app: mit-els-api
+  name: mit-els-api
+  namespace: services
+spec:
+  ports:
+    - name: mit-els-api-http-8080
+      port: 8080
+      protocol: TCP
+      targetPort: http-8080
+  selector:
+    app: mit-els-api
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mit-els-api
+  annotations:
+    meta.helm.sh/release-name: services
+    meta.helm.sh/release-namespace: services
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+  labels:
+    app: mit-els-api
+  namespace: services
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /mit/els-api-service(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: mit-els-api
+                port:
+                  number: 8080
